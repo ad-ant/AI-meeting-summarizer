@@ -28,6 +28,7 @@ CHUNK_MAX_WORDS = int(os.getenv("CHUNK_MAX_WORDS", "500"))
 
 # agent configuration
 AGENT_MAX_RETRIES = int(os.getenv("AGENT_MAX_RETRIES", "2"))
+SUMMARY_MAX_RETRIES = int(os.getenv("SUMMARY_MAX_RETRIES", "2"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 
 # logging configuration

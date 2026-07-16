@@ -1,0 +1,6 @@
+[project]
+name = "ai-meeting-summarizer"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
