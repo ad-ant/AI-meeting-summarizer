@@ -4,9 +4,45 @@ from pathlib import Path
 
 import requests
 
-from config import AGENT_MAX_RETRIES, OLLAMA_BASE_URL, OLLAMA_MODEL, REQUEST_TIMEOUT
+from config import (
+    AGENT_MAX_RETRIES,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    REQUEST_TIMEOUT,
+    SUMMARY_MAX_RETRIES,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _post_with_retry(
+    url: str,
+    payload: dict,
+    max_retries: int,
+    operation: str,
+) -> dict:
+    """POST to Ollama with retries on timeout and connection errors."""
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response.json()
+        except (requests.ReadTimeout, requests.ConnectionError) as err:
+            last_error = err
+            logger.warning(
+                "%s failed (attempt %s/%s): %s",
+                operation,
+                attempt,
+                max_retries,
+                err,
+            )
+
+    raise RuntimeError(
+        f"Ollama {operation} failed after {max_retries} attempts. "
+        "Check Ollama is running and increase REQUEST_TIMEOUT."
+    ) from last_error
 
 
 def summarize_chunk(text: str) -> str:
@@ -18,31 +54,17 @@ def summarize_chunk(text: str) -> str:
         f"{text}"
     )
 
-    last_error: Exception | None = None
+    data = _post_with_retry(
+        f"{OLLAMA_BASE_URL}/generate",
+        {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        max_retries=SUMMARY_MAX_RETRIES,
+        operation="summary",
+    )
+    summary = data.get("response")
+    if not isinstance(summary, str):
+        raise ValueError("Invalid Ollama response: missing 'response' field")
 
-    for attempt in range(1, 3):
-        try:
-            response = requests.post(
-                f"{OLLAMA_BASE_URL}/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            summary = data.get("response")
-            if not isinstance(summary, str):
-                raise ValueError("Invalid Ollama response: missing 'response' field")
-
-            return summary
-        except requests.ReadTimeout as err:
-            last_error = err
-            logger.warning("Summary timeout (attempt %s/2)", attempt)
-
-    raise RuntimeError(
-        "Ollama summary request timed out. Increase REQUEST_TIMEOUT in .env "
-        "or use a faster model."
-    ) from last_error
+    return summary
 
 
 def save_action_items(tasks: list[str], output_path: str) -> str:
@@ -64,6 +86,7 @@ def save_action_items(tasks: list[str], output_path: str) -> str:
 
 
 def _extract_tasks_from_tool_call(tool_call: dict) -> list[str]:
+    """Parse tasks list from Ollama tool_call arguments (dict or JSON string)."""
     args = tool_call.get("function", {}).get("arguments", {})
 
     if isinstance(args, str):
@@ -86,6 +109,7 @@ def _extract_tasks_from_tool_call(tool_call: dict) -> list[str]:
 
 
 def _looks_like_action_item(text: str) -> bool:
+    """Return True if text looks like a concrete action item, not a meeting topic."""
     text = text.strip()
     if len(text.split()) < 3:
         return False
@@ -95,6 +119,7 @@ def _looks_like_action_item(text: str) -> bool:
 
 
 def _filter_action_items(tasks: list[str]) -> list[str]:
+    """Remove empty, too-short, or topic-like strings from extracted tasks."""
     filtered: list[str] = []
     for task in tasks:
         cleaned = " ".join(task.split())
@@ -146,19 +171,17 @@ def run_agentic_analysis(full_summary: str, output_file_path: str) -> None:
         try:
             logger.info("Agent attempt %s/%s", attempt, AGENT_MAX_RETRIES + 1)
 
-            response = requests.post(
+            data = _post_with_retry(
                 f"{OLLAMA_BASE_URL}/chat",
-                json={
+                {
                     "model": OLLAMA_MODEL,
                     "messages": messages,
                     "tools": tools,
                     "stream": False,
                 },
-                timeout=REQUEST_TIMEOUT,
+                max_retries=AGENT_MAX_RETRIES + 1,
+                operation="agent",
             )
-            response.raise_for_status()
-
-            data = response.json()
             message = data.get("message", {})
             tool_calls = message.get("tool_calls", [])
 
@@ -200,6 +223,10 @@ def run_agentic_analysis(full_summary: str, output_file_path: str) -> None:
             else:
                 logger.error("Agent failed to produce valid JSON after retries")
                 return
+
+        except RuntimeError as err:
+            logger.error("Ollama request failed: %s", err)
+            return
 
         except requests.RequestException as err:
             logger.error("Ollama request failed: %s", err)
