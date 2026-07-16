@@ -21,7 +21,7 @@ I wanted a practical project that combines:
 - clean Python structure (config, logging, tests)
 
 ## Tech stack
-- Python 3.8+
+- Python 3.10+
 - faster-whisper 1.0.1
 - Ollama (Llama 3.2)
 - requests 2.31.0
@@ -30,7 +30,7 @@ I wanted a practical project that combines:
 
 ### Prerequisites:
 
-- Python 3.8+
+- Python 3.10+
 - Ollama running locally (default: port 11434)
 - Audio file in `data/input` (mp3, mp4, wav)
 
