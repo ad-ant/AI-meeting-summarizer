@@ -20,12 +20,12 @@ def get_audio_file(input_dir: str) -> Path:
     if not input_path.is_dir():
         raise NotADirectoryError(f"Not a directory: {input_dir}")
 
-    for file_path in input_path.iterdir():
+    for file_path in sorted(input_path.iterdir()):
         if file_path.suffix.lower() in SUPPORTED_AUDIO_FORMATS:
             logger.info("Using audio file: %s", file_path.name)
             return file_path
 
-    available = [p.name for p in input_path.iterdir()]
+    available = sorted(p.name for p in input_path.iterdir())
     raise FileNotFoundError(
         f"No supported audio file in {input_dir}. "
         f"Expected one of {SUPPORTED_AUDIO_FORMATS}. Found: {available}"
