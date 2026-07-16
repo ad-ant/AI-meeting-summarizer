@@ -70,6 +70,32 @@ def summarize_chunk(text: str) -> str:
     return summary
 
 
+def merge_summaries(summaries: list[str]) -> str:
+    """Merge per-chunk summaries into one coherent meeting summary."""
+    if len(summaries) == 1:
+        return summaries[0]
+
+    combined = "\n\n---\n\n".join(summaries)
+    prompt = (
+        "Odpowiadaj po polsku.\n"
+        "Poniżej są streszczenia fragmentów jednego spotkania. Połącz je w jedno "
+        "spójne podsumowanie, usuń powtórzenia. Pisz pełnymi zdaniami, bez punktów.\n\n"
+        f"{combined}"
+    )
+
+    data = _post_with_retry(
+        f"{OLLAMA_BASE_URL}/generate",
+        {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        max_retries=SUMMARY_MAX_RETRIES,
+        operation="summary merge",
+    )
+    merged = data.get("response")
+    if not isinstance(merged, str):
+        raise ValueError("Invalid Ollama response: missing 'response' field")
+
+    return merged
+
+
 def save_action_items(tasks: list[str], output_path: str) -> str:
     """Save action items as a markdown checklist."""
     out = Path(output_path)

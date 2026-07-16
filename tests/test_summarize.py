@@ -5,6 +5,7 @@ import requests
 
 from processing.summarize import (
     _extract_tasks_from_tool_call,
+    merge_summaries,
     run_agentic_analysis,
     summarize_chunk,
 )
@@ -88,6 +89,22 @@ def test_summarize_chunk_raises_when_ollama_never_responds(mock_post, monkeypatc
 
     with pytest.raises(RuntimeError):
         summarize_chunk("tresc")
+
+
+def test_merge_summaries_skips_ollama_for_single_chunk():
+    result = merge_summaries(["Jedyne streszczenie."])
+
+    assert result == "Jedyne streszczenie."
+
+
+@patch("processing.summarize.requests.post")
+def test_merge_summaries_combines_multiple_chunks(mock_post):
+    mock_post.return_value = _mock_response({"response": "Spojne podsumowanie calego spotkania."})
+
+    result = merge_summaries(["Fragment 1.", "Fragment 2."])
+
+    assert result == "Spojne podsumowanie calego spotkania."
+    mock_post.assert_called_once()
 
 
 @patch("processing.summarize.requests.post")

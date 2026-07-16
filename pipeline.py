@@ -4,7 +4,7 @@ from pathlib import Path
 from config import INPUT_DIR, OUTPUT_DIR
 from audio.transcribe import transcribe_audio
 from processing.chunking import split_text
-from processing.summarize import run_agentic_analysis, summarize_chunk
+from processing.summarize import merge_summaries, run_agentic_analysis, summarize_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,13 @@ def run_pipeline(input_dir: str = str(INPUT_DIR), output_dir: str = str(OUTPUT_D
     if not summaries:
         raise RuntimeError("Could not summarize any chunk. Check Ollama and timeout settings.")
 
-    full_summary = "\n\n".join(summaries)
+    logger.info("Merging chunk summaries")
+    try:
+        full_summary = merge_summaries(summaries)
+    except (RuntimeError, ValueError) as err:
+        logger.warning("Could not merge summaries, falling back to concatenation: %s", err)
+        full_summary = "\n\n".join(summaries)
+
     summary_path.write_text(full_summary, encoding="utf-8")
     logger.info("Summary saved: %s", summary_path)
 
