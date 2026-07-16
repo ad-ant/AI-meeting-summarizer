@@ -90,7 +90,7 @@ def _looks_like_action_item(text: str) -> bool:
     if len(text.split()) < 3:
         return False
 
-    bad_starts = ("temat", "podsumowanie", "spotkanie", "budownictwo", "geotechnika")
+    bad_starts = ("temat", "podsumowanie", "spotkanie", "agenda", "dyskusja")
     return not text.lower().startswith(bad_starts)
 
 
