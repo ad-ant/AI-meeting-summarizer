@@ -8,8 +8,8 @@ The app runs a simple local pipeline:
 1. Reads one audio file from `data/input`
 2. Transcribes speech with faster-whisper
 3. Splits transcript into chunks
-4. Summarizes chunks with Ollama (Llama 3.2)
-5. Saves final summary
+4. Summarizes each chunk with Ollama (Llama 3.2)
+5. Merges chunk summaries into one coherent summary
 6. Tries to extract action items and save them to markdown
 
 ## Why I built it
@@ -71,14 +71,15 @@ Main settings are in `.env` and loaded from `config.py`:
 - `CHUNK_MAX_WORDS`
 - `OLLAMA_MODEL`
 - `REQUEST_TIMEOUT`
+- `SUMMARY_MAX_RETRIES`
+- `AGENT_MAX_RETRIES`
 
 ## Current limitations
 - Works locally with Ollama, no hosted API
 - No web UI yet
-- Tests currently cover chunking logic only
+- Chunk order is preserved, but there's no speaker separation
 
 ## Future improvements
 - Add REST API
-- Add more tests (summarization and agent flow)
 - Add Docker setup
 - Add CI pipeline
