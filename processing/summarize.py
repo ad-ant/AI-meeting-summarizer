@@ -21,7 +21,7 @@ def _post_with_retry(
     max_retries: int,
     operation: str,
 ) -> dict:
-    """POST to Ollama with retries on timeout and connection errors."""
+    """Call Ollama with a couple of retries - local models can be slow or flaky."""
     last_error: Exception | None = None
 
     for attempt in range(1, max_retries + 1):
@@ -38,6 +38,9 @@ def _post_with_retry(
                 max_retries,
                 err,
             )
+        except ValueError as err:
+            # Body wasn't valid JSON - not a tool-call issue, retrying won't help.
+            raise RuntimeError(f"Ollama {operation} returned invalid JSON: {err}") from err
 
     raise RuntimeError(
         f"Ollama {operation} failed after {max_retries} attempts. "
@@ -86,7 +89,7 @@ def save_action_items(tasks: list[str], output_path: str) -> str:
 
 
 def _extract_tasks_from_tool_call(tool_call: dict) -> list[str]:
-    """Parse tasks list from Ollama tool_call arguments (dict or JSON string)."""
+    """Pull the tasks list out of a tool call - arguments can be a dict or a raw JSON string."""
     args = tool_call.get("function", {}).get("arguments", {})
 
     if isinstance(args, str):
@@ -97,7 +100,7 @@ def _extract_tasks_from_tool_call(tool_call: dict) -> list[str]:
         return [str(t).strip() for t in tasks if str(t).strip()]
 
     if isinstance(tasks, str):
-        # Sometimes model returns string instead of JSON array.
+        # model sometimes returns a comma-separated string instead of a JSON list
         try:
             parsed = json.loads(tasks)
             if isinstance(parsed, list):
@@ -109,7 +112,7 @@ def _extract_tasks_from_tool_call(tool_call: dict) -> list[str]:
 
 
 def _looks_like_action_item(text: str) -> bool:
-    """Return True if text looks like a concrete action item, not a meeting topic."""
+    """Filter out meeting topics/headers that slipped in as fake tasks."""
     text = text.strip()
     if len(text.split()) < 3:
         return False
@@ -119,7 +122,7 @@ def _looks_like_action_item(text: str) -> bool:
 
 
 def _filter_action_items(tasks: list[str]) -> list[str]:
-    """Remove empty, too-short, or topic-like strings from extracted tasks."""
+    """Clean up whitespace and drop anything that isn't a real task."""
     filtered: list[str] = []
     for task in tasks:
         cleaned = " ".join(task.split())
@@ -224,11 +227,7 @@ def run_agentic_analysis(full_summary: str, output_file_path: str) -> None:
                 logger.error("Agent failed to produce valid JSON after retries")
                 return
 
-        except RuntimeError as err:
-            logger.error("Ollama request failed: %s", err)
-            return
-
-        except requests.RequestException as err:
+        except (RuntimeError, requests.RequestException) as err:
             logger.error("Ollama request failed: %s", err)
             return
 
